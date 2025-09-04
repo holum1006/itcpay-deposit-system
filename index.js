@@ -136,6 +136,23 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("💥 Unhandled Rejection at:", promise, "reason:", reason);
 });
 
+
+
+// https port for render.com compatibility
+
+const express = require("express");
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Minimal endpoint just to keep Render happy
+app.get("/", (req, res) => res.send("🚀 Deposit listener running!"));
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`🌐 Web service listening on port ${PORT}`);
+});
+
+
 // ----------------- STARTUP -----------------
 (async () => {
   console.log("🚀 Starting deposit listener...");
