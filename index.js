@@ -2,25 +2,26 @@
 require('dotenv').config();
 const { ethers } = require("ethers");
 const admin = require("firebase-admin");
-const fetch = require("node-fetch"); // safe for Node <18
+
+// ----------------- FETCH SETUP -----------------
+// Node-fetch wrapper for CommonJS (v3+)
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 // ----------------- CONFIG -----------------
-const RPC_URL = process.env.RPC_URL;                  // Arbitrum One RPC
-const SEED_PHRASE = process.env.SEED_PHRASE;          // App wallet seed phrase
-const ERC20_ADDRESS = process.env.ERC20_ADDRESS;      // ERC20 contract address
-const DECIMALS = Number(process.env.DECIMALS) || 18;  // usually 18
-const DATABASE_URL = process.env.DATABASE_URL;        // Firebase Realtime DB URL
-const SCAN_INTERVAL = 4 * 60 * 60 * 1000;             // 4 hours
-const SELF_PING_INTERVAL = 5 * 60 * 1000;             // 5 minutes
-const RENDER_URL = process.env.RENDER_URL;            // Optional self-ping
+const RPC_URL = process.env.RPC_URL;                  
+const SEED_PHRASE = process.env.SEED_PHRASE;          
+const ERC20_ADDRESS = process.env.ERC20_ADDRESS;      
+const DECIMALS = Number(process.env.DECIMALS) || 18;  
+const DATABASE_URL = process.env.DATABASE_URL;        
+const SCAN_INTERVAL = 4 * 60 * 60 * 1000;             
+const SELF_PING_INTERVAL = 5 * 60 * 1000;             
+const RENDER_URL = process.env.RENDER_URL;            
 
 // ----------------- ETHERS SETUP -----------------
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
 const wallet = ethers.Wallet.fromMnemonic(SEED_PHRASE).connect(provider);
 
-const erc20Abi = [
-  "event Transfer(address indexed from, address indexed to, uint256 value)"
-];
+const erc20Abi = ["event Transfer(address indexed from, address indexed to, uint256 value)"];
 const tokenContract = new ethers.Contract(ERC20_ADDRESS, erc20Abi, provider);
 
 // ----------------- FIREBASE SETUP -----------------
@@ -36,9 +37,10 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: DATABASE_URL
 });
+
 const db = admin.database();
 
-// ----------------- HELPER: LAST SCANNED BLOCK -----------------
+// ----------------- HELPER FUNCTIONS -----------------
 async function getLastScannedBlock() {
   const snapshot = await db.ref("lastScannedBlock").once("value");
   return snapshot.val();
@@ -48,7 +50,6 @@ async function setLastScannedBlock(blockNumber) {
   await db.ref("lastScannedBlock").set(blockNumber);
 }
 
-// ----------------- UPDATE USER BALANCE -----------------
 async function updateUserBalance(userWallet, amount) {
   const usersRef = db.ref("user");
   const snapshot = await usersRef.once("value");
@@ -136,22 +137,16 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("💥 Unhandled Rejection at:", promise, "reason:", reason);
 });
 
-
-
-// https port for render.com compatibility
-
+// ----------------- EXPRESS SERVER FOR RENDER -----------------
 const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Minimal endpoint just to keep Render happy
 app.get("/", (req, res) => res.send("🚀 Deposit listener running!"));
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`🌐 Web service listening on port ${PORT}`);
 });
-
 
 // ----------------- STARTUP -----------------
 (async () => {
@@ -160,7 +155,6 @@ app.listen(PORT, () => {
   await scanPastDeposits();
   console.log("🚀 Deposit listener active on Arbitrum One.");
 
-  // Periodically scan for missed deposits
   setInterval(async () => {
     try {
       await scanPastDeposits();
@@ -169,7 +163,7 @@ app.listen(PORT, () => {
     }
   }, SCAN_INTERVAL);
 
-  // Start self-ping interval
   setInterval(selfPing, SELF_PING_INTERVAL);
   selfPing();
 })();
+// ----------------- END OF FILE -----------------
