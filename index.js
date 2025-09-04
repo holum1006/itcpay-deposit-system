@@ -9,8 +9,8 @@ const SEED_PHRASE = process.env.SEED_PHRASE;          // App wallet seed phrase
 const ERC20_ADDRESS = process.env.ERC20_ADDRESS;      // ERC20 contract address
 const DECIMALS = process.env.DECIMALS || 18;          // usually 18
 const DATABASE_URL = process.env.DATABASE_URL;        // Firebase Realtime DB URL
-const SCAN_INTERVAL = 60 * 1000;                      // 1 minute
-const SELF_PING_INTERVAL = 5 * 60 * 1000;            // 5 minutes
+const SCAN_INTERVAL = 4 * 60 * 60 * 1000;             // 4 hours
+const SELF_PING_INTERVAL = 5 * 60 * 1000;             // 5 minutes
 const RENDER_URL = process.env.RENDER_URL;            // Your Render URL
 
 // ----------------- ETHERS SETUP -----------------
