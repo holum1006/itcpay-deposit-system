@@ -2,16 +2,17 @@
 require('dotenv').config();
 const { ethers } = require("ethers");
 const admin = require("firebase-admin");
+const fetch = require("node-fetch"); // safe for Node <18
 
 // ----------------- CONFIG -----------------
 const RPC_URL = process.env.RPC_URL;                  // Arbitrum One RPC
 const SEED_PHRASE = process.env.SEED_PHRASE;          // App wallet seed phrase
 const ERC20_ADDRESS = process.env.ERC20_ADDRESS;      // ERC20 contract address
-const DECIMALS = process.env.DECIMALS || 18;          // usually 18
+const DECIMALS = Number(process.env.DECIMALS) || 18;  // usually 18
 const DATABASE_URL = process.env.DATABASE_URL;        // Firebase Realtime DB URL
 const SCAN_INTERVAL = 4 * 60 * 60 * 1000;             // 4 hours
 const SELF_PING_INTERVAL = 5 * 60 * 1000;             // 5 minutes
-const RENDER_URL = process.env.RENDER_URL;            // Your Render URL
+const RENDER_URL = process.env.RENDER_URL;            // Optional self-ping
 
 // ----------------- ETHERS SETUP -----------------
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
@@ -37,7 +38,7 @@ admin.initializeApp({
 });
 const db = admin.database();
 
-// ----------------- HELPER: TRACK LAST SCANNED BLOCK -----------------
+// ----------------- HELPER: LAST SCANNED BLOCK -----------------
 async function getLastScannedBlock() {
   const snapshot = await db.ref("lastScannedBlock").once("value");
   return snapshot.val();
@@ -52,17 +53,12 @@ async function updateUserBalance(userWallet, amount) {
   const usersRef = db.ref("user");
   const snapshot = await usersRef.once("value");
   const users = snapshot.val();
-
   if (!users) return;
 
   for (const uid in users) {
-    if (
-      users[uid].wallet &&
-      users[uid].wallet.toLowerCase() === userWallet.toLowerCase()
-    ) {
+    if (users[uid].wallet?.toLowerCase() === userWallet.toLowerCase()) {
       const prevBalance = Number(users[uid].balance || 0);
       const newBalance = prevBalance + Number(amount);
-
       await usersRef.child(uid).update({ balance: newBalance });
       console.log(`✅ Deposit: Updated ${uid}, new balance = ${newBalance}`);
       return;
@@ -76,12 +72,9 @@ async function updateUserBalance(userWallet, amount) {
 tokenContract.on("Transfer", async (from, to, value, event) => {
   try {
     const amount = Number(ethers.utils.formatUnits(value, DECIMALS));
-
     if (to.toLowerCase() === wallet.address.toLowerCase()) {
       console.log(`💰 Deposit detected! From: ${from}, Amount: ${amount}`);
       await updateUserBalance(from, amount);
-
-      // Update last scanned block
       await setLastScannedBlock(event.blockNumber);
     }
   } catch (err) {
@@ -96,7 +89,7 @@ async function scanPastDeposits() {
     const latestBlock = await provider.getBlockNumber();
 
     if (lastBlock === null) {
-      console.log("⚠️ No last scanned block found. Initializing to current block...");
+      console.log("⚠️ No last scanned block. Initializing to current block...");
       await setLastScannedBlock(latestBlock);
       return;
     }
@@ -145,16 +138,21 @@ process.on("unhandledRejection", (reason, promise) => {
 
 // ----------------- STARTUP -----------------
 (async () => {
+  console.log("🚀 Starting deposit listener...");
+
   await scanPastDeposits();
   console.log("🚀 Deposit listener active on Arbitrum One.");
 
   // Periodically scan for missed deposits
   setInterval(async () => {
-    await scanPastDeposits();
+    try {
+      await scanPastDeposits();
+    } catch (err) {
+      console.error("⚠️ Error in scheduled scan:", err);
+    }
   }, SCAN_INTERVAL);
 
   // Start self-ping interval
   setInterval(selfPing, SELF_PING_INTERVAL);
-  // Initial ping
   selfPing();
 })();
